@@ -1,9 +1,12 @@
+# On heavy development !
+
+![ficus](ficus-banner.png)
 # Quick Go + Htmx + Tailwind  Frontend-Dev
 
 Starts a local server to test htmx pages + tailwind designs.
 Install:
 ```
-go install github.com/notbloom/frontend-dev
+go install github.com/notbloom/ficus
 ```
 # Features
 - Quick local server 
@@ -16,11 +19,11 @@ go install github.com/notbloom/frontend-dev
 
 Start the server with defaults:
 ```
-fontend-dev [ -v | --verbose ]
+ficus [ -v | --verbose ]
 ```
 Create a project template:
 ```
-frontend-dev init [ path ]
+ficus init [ path ]
 ```
 
 ## Usage: 
@@ -47,7 +50,7 @@ project-folder
 └── tailwind.config.js           // Tailwind configuration
 ```
 # Todo
-- [ ] Init doesnt create assets folder or style.css
+- [ ] Init doesn't create assets folder or style.css
 - [ ] Correct folder structure
 - [ ] Include layout in files
 - [ ] Inject reload code in pages
