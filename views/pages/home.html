@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/assets/css/style.css" rel="stylesheet">
+</head>
+
+<script>
+    const evtSource = new EventSource("/reload/stream");
+
+    evtSource.onmessage = (event) => {
+        console.log(`message: ${event.data}`);
+        location.reload();
+    };
+</script>
+<div class="container p-6">
+    <h1 class="text-5xl"> A ver cuanto Titulo {{.Title}}</h1>
+    <p class="py-2 bg-red-900"> Párrafo de texto con colores </p>
+</div>
+

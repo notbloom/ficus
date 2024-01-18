@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/assets/css/style.css" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
+
+</head>
+
+<script>
+    const evtSource = new EventSource("/reload/stream");
+
+    evtSource.onmessage = (event) => {
+        console.log(`message: ${event.data}`);
+        location.reload();
+    };
+</script>
+<div class=" mx-auto w-96">
+    <h1 class="text-3xl"> Hábito 1</h1>
+    <select>
+        <option value="0">Smoke</option>
+        <option value="1">Tomar Agua</option>
+        <option value="2">Ejercicio</option>
+        <option value="3">Dibujar</option>
+    </select>
+{{ .Name }}
+    <div class="grid grid-cols-7 gap-4">
+        {{range $i := N 1 30}}
+        <div hx-target="this"
+             hx-swap="outerHTML"
+             hx-get="/pages/day/"
+             class="h-12 w-12 rounded-full text-center text-3xl bg-gray-600 text-gray-300 p-1"
+        >{{$i}}</div>
+        
+        {{end}}
+
+        {{range $j := N 1 30}}
+        <div class="h-12 w-12 rounded-full text-center text-3xl bg-violet-600 text-violet-300 p-1">{{$j}}</div>
+        {{end}}
+
+        <div hx-get="/pages/feed/?page=2"
+            hx-trigger="revealed"
+            hx-swap="afterend"
+             class="h-12 w-12 rounded-full text-center text-3xl bg-violet-600 text-violet-300 p-1">X</div>
+        </div>
+    </div>
+
+</html>

@@ -1,0 +1,14 @@
+{
+  "Name": "pages",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dayData": {
+    "10-01-2024": true,
+    "9-01-2024": false
+  },
+  "private": true
+}
