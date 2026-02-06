@@ -15,29 +15,29 @@ type Link struct {
 }
 
 func HomeList(w http.ResponseWriter, r *http.Request) {
-	//vars := mux.Vars(r)
 	w.WriteHeader(http.StatusOK)
 
-	directory := "./views/pages/" // The current directory
+	directory := cfg.PagesPath()
 
-	files, err := os.ReadDir(directory) //read the files from the directory
+	files, err := os.ReadDir(directory)
 	if err != nil {
-		fmt.Println("error reading directory:", err) //print error if directory is not read properly
+		fmt.Fprintf(w, "error reading directory: %v\n", err)
 		return
 	}
 
-	var htmlFiles []Link //declare a slice to store the HTML files
+	var htmlFiles []Link
 
 	for _, file := range files {
-		if strings.HasSuffix(file.Name(), ".html") {
+		if strings.HasSuffix(file.Name(), cfg.Folders.ViewsExtension) {
 			fileName := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
-			htmlFiles = append(htmlFiles, Link{Url: "/pages/" + fileName + "/", Title: file.Name()}) //append the HTML file names to the slice
+			htmlFiles = append(htmlFiles, Link{
+				Url:   "/pages/" + fileName + "/",
+				Title: file.Name(),
+			})
 		}
 	}
 
-	//	fmt.Println(htmlFiles)
-
-	path := "./views/index.html"
+	path := filepath.Join(cfg.Folders.ViewsFolder, "index.html")
 
 	if _, err := os.Stat(path); err != nil {
 		fmt.Fprintf(w, "template page not found: %v\n", path)

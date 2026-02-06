@@ -7,7 +7,6 @@ import (
 )
 
 type Broker struct {
-
 	// Events are pushed to this channel by the main events-gathering routine
 	Notifier chan []byte
 
@@ -22,7 +21,6 @@ type Broker struct {
 }
 
 func NewBrokerServer() (broker *Broker) {
-	// Instantiate a broker
 	broker = &Broker{
 		Notifier:       make(chan []byte, 1),
 		newClients:     make(chan chan []byte),
@@ -30,7 +28,6 @@ func NewBrokerServer() (broker *Broker) {
 		clients:        make(map[chan []byte]bool),
 	}
 
-	// Set it running - listening and broadcasting events
 	go broker.listen()
 
 	return
@@ -60,67 +57,54 @@ func (broker *Broker) Stream(w http.ResponseWriter, r *http.Request) {
 	// Signal the broker that we have a new connection
 	broker.newClients <- messageChan
 
-	// Remove this client from the map of connected clients
-	// when this handler exits.
+	// Remove this client from the map of connected clients when this handler exits
 	defer func() {
 		broker.closingClients <- messageChan
 	}()
 
-	// Listen to connection close and un-register messageChan
-	notify := w.(http.CloseNotifier).CloseNotify()
-
+	// Listen to connection close using request context (replaces deprecated CloseNotifier)
 	go func() {
-		<-notify
+		<-r.Context().Done()
 		broker.closingClients <- messageChan
 	}()
 
 	for {
-
-		// Write to the ResponseWriter
-		// Server Sent Events compatible
+		// Write to the ResponseWriter - Server Sent Events compatible
 		fmt.Fprintf(w, "data: %s\n\n", <-messageChan)
 
-		// Flush the data immediatly instead of buffering it for later.
+		// Flush the data immediately instead of buffering it for later
 		flusher.Flush()
 	}
-
 }
 
 func (broker *Broker) listen() {
 	for {
 		select {
 		case s := <-broker.newClients:
-
-			// A new client has connected.
-			// Register their message channel
+			// A new client has connected - register their message channel
 			broker.clients[s] = true
-		//	log.Debug("Client added", "clients", len(broker.clients))
+
 		case s := <-broker.closingClients:
-
-			// A client has dettached and we want to
-			// stop sending them messages.
+			// A client has detached - stop sending them messages
 			delete(broker.clients, s)
-		//	log.Debug("Removed client", "clients", len(broker.clients))
-		case event := <-broker.Notifier:
 
-			// We got a new event from the outside!
-			// Send event to all connected clients
-			for clientMessageChan, _ := range broker.clients {
+		case event := <-broker.Notifier:
+			// We got a new event - send to all connected clients
+			for clientMessageChan := range broker.clients {
 				clientMessageChan <- event
 			}
 		}
 	}
-
 }
+
 func (broker *Broker) Reload() {
 	broker.Notifier <- []byte("1")
 }
+
 func (broker *Broker) BroadcastMessage(w http.ResponseWriter, r *http.Request) {
-	// params := mux.Vars(r)
 	var msg Message
 	_ = json.NewDecoder(r.Body).Decode(&msg)
 
-	// broker.Notifier <- []byte(fmt.Sprintf("the time is %v", msg))
 	j, _ := json.Marshal(msg)
 	broker.Notifier <- []byte(j)
 	json.NewEncoder(w).Encode(msg)

@@ -1,74 +1,93 @@
 package watcher
 
 import (
+	"os"
+	"strings"
+
 	"github.com/charmbracelet/log"
 	"github.com/fsnotify/fsnotify"
-	"github.com/notbloom/ficus/npm"
-	"github.com/notbloom/ficus/server"
+	"github.com/notbloom/ficus/config"
 )
 
-type Config struct {
-	IncludeSuffix     []string
-	ExcludeSuffix     []string
-	Folders           []string
-	IncludeSubFolders bool
+type Watcher struct {
+	fsWatcher *fsnotify.Watcher
+	cfg       *config.Config
+	OnChange  func(path string)
+	done      chan struct{}
 }
 
-func Start(config Config, OnChange func(event fsnotify.Event)) {
-
-	watcher, err := fsnotify.NewWatcher()
-
+func New(cfg *config.Config) (*Watcher, error) {
+	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	defer func(watcher *fsnotify.Watcher) {
-		err := watcher.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(watcher)
 
-	// Start listening for events.
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				//log.Println("event:", event)
-				if event.Has(fsnotify.Write) {
-					if event.Name[len(event.Name)-1:] == "~" {
-						log.Debug("Ignoring temp~ file ")
-					} else {
-						log.Print("modified file:", event.Name)
-						log.Info("Building Tailwind...")
-						npm.RunTailwind("", "")
-						server.SendRefresh()
-						//b.Reload()
-						OnChange(event)
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Print("error:", err)
+	return &Watcher{
+		fsWatcher: fsWatcher,
+		cfg:       cfg,
+		done:      make(chan struct{}),
+	}, nil
+}
+
+func (w *Watcher) Start() error {
+	// Add watched paths
+	paths := []string{w.cfg.PagesPath()}
+
+	// Also watch components if directory exists
+	if _, err := os.Stat(w.cfg.ComponentsPath()); err == nil {
+		paths = append(paths, w.cfg.ComponentsPath())
+	}
+
+	for _, path := range paths {
+		if err := w.fsWatcher.Add(path); err != nil {
+			log.Warn("Could not watch path", "path", path, "error", err)
+			continue
+		}
+		log.Info("Watching", "path", path)
+	}
+
+	go w.listen()
+	return nil
+}
+
+func (w *Watcher) Stop() {
+	close(w.done)
+	w.fsWatcher.Close()
+}
+
+func (w *Watcher) listen() {
+	for {
+		select {
+		case <-w.done:
+			return
+		case event, ok := <-w.fsWatcher.Events:
+			if !ok {
+				return
 			}
+			if event.Has(fsnotify.Write) {
+				if w.shouldIgnore(event.Name) {
+					log.Debug("Ignoring file", "path", event.Name)
+					continue
+				}
+				log.Info("File modified", "path", event.Name)
+				if w.OnChange != nil {
+					w.OnChange(event.Name)
+				}
+			}
+		case err, ok := <-w.fsWatcher.Errors:
+			if !ok {
+				return
+			}
+			log.Error("Watch error", "error", err)
 		}
-	}()
+	}
+}
 
-	// Add a path.
-	for _, folder := range config.Folders {
-		err = watcher.Add(folder)
-		if err != nil {
-			log.Fatal(err)
+func (w *Watcher) shouldIgnore(path string) bool {
+	for _, suffix := range w.cfg.Watch.ExcludeSuffix {
+		if strings.HasSuffix(path, suffix) {
+			return true
 		}
-		log.Info("Watching: " + folder)
 	}
-	/*err = watcher.Add("./views/pages/")
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Info("Watching: ./views/pages/")*/
+	return false
 }

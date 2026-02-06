@@ -1,84 +1,81 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/charmbracelet/log"
-	"github.com/fsnotify/fsnotify"
 	"github.com/notbloom/ficus/config"
 	"github.com/notbloom/ficus/npm"
 	"github.com/notbloom/ficus/server"
+	"github.com/notbloom/ficus/watcher"
 	"github.com/spf13/cobra"
-	"os"
 )
 
-var VerboseDebug bool
+var verbose bool
 
 func init() {
-	rootCmd.Flags().BoolVarP(&VerboseDebug, "verbose", "v", false, "verbose output")
+	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose logging")
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "front-dev",
-	Short: "Front-Dev is server static site generator",
-	Long: `A Fast and Flexible Static Site Generator built with
-                love by spf13 and friends in Go.
-                Complete documentation is available at http://hugo.spf13.com`,
+	Use:   "ficus",
+	Short: "Ficus is a fast frontend development server",
+	Long:  `A lightweight Go development server for rapid frontend development with Go HTML templates, HTMX, and Tailwind CSS.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Do Stuff Here
-		//fmt.Println("ejecutar cosa", args)
+		if verbose {
+			log.SetLevel(log.DebugLevel)
+		}
 
 		// Read config file or get default
 		cfg := config.GetConfig()
-		log.Info(cfg.ViewsRoute)
 
-		log.Info("Server Started at http://127.0.0.1:8000")
-		log.Info("Serving /layout/:id for /layout/:id.html")
-		log.Info("Serving /pages/:id for /pages/:id.html")
-		log.Info("File watching")
+		log.Info("Starting Ficus", "url", "http://"+cfg.ServerAddr())
+		log.Info("Press Ctrl+C to stop")
 
-		watcher, err := fsnotify.NewWatcher()
+		// Setup file watcher
+		w, err := watcher.New(cfg)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("Failed to create watcher", "error", err)
 		}
-		defer watcher.Close()
 
-		// Start listening for events.
-		go func() {
-			for {
-				select {
-				case event, ok := <-watcher.Events:
-					if !ok {
-						return
-					}
-					//log.Println("event:", event)
-					if event.Has(fsnotify.Write) {
-						if event.Name[len(event.Name)-1:] == "~" {
-							log.Debug("Ignoring temp~ file ")
-						} else {
-							log.Print("modified file:", event.Name)
-							log.Info("Building Tailwind...")
-							npm.RunTailwind("", "")
-							server.SendRefresh()
-							//b.Reload()
-						}
-					}
-				case err, ok := <-watcher.Errors:
-					if !ok {
-						return
-					}
-					log.Print("error:", err)
-				}
+		w.OnChange = func(path string) {
+			log.Info("Building Tailwind...")
+			npm.RunTailwind(cfg)
+			if broker := server.GetBroker(); broker != nil {
+				broker.Reload()
 			}
-		}()
-
-		// Add a path.
-		err = watcher.Add("./views/pages/")
-		if err != nil {
-			log.Fatal(err)
 		}
-		log.Info("Watching: ./views/pages/")
 
-		server.StartServer()
+		if err := w.Start(); err != nil {
+			log.Fatal("Failed to start watcher", "error", err)
+		}
+
+		// Setup signal handling for graceful shutdown
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+		// Start server in goroutine
+		go server.StartServer(cfg)
+
+		// Wait for shutdown signal
+		<-sigChan
+		log.Info("Shutting down...")
+
+		// Graceful shutdown with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		w.Stop()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Error("Shutdown error", "error", err)
+		}
+
+		log.Info("Goodbye!")
 	},
 }
 
